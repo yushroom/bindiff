@@ -13,7 +13,8 @@ namespace bindiff {
 
 struct BlockResult {
     uint32_t block_index;
-    std::vector<uint8_t> data;  // 压缩后的操作序列
+    std::vector<uint8_t> data;  // 压缩后的数据
+    uint32_t original_size = 0; // 压缩前的序列化数据大小
     bool success = false;
     std::string error;
 };
@@ -34,7 +35,8 @@ public:
     bool reconstruct_block(
         uint32_t block_index,
         const byte* old_data, size_t old_size,
-        const std::vector<uint8_t>& block_data,
+        const std::vector<uint8_t>& compressed_data,
+        uint32_t original_size,
         byte* output, size_t output_size
     );
 
@@ -69,40 +71,14 @@ private:
         const std::string& path,
         const MMapFile& old_file,
         const MMapFile& new_file,
-        const std::vector<BlockResult>& blocks
+        const std::vector<BlockResult>& blocks,
+        const std::array<uint8_t, 32>& old_hash,
+        const std::array<uint8_t, 32>& new_hash
     );
     
     DiffOptions options_;
     std::unique_ptr<ThreadPool> thread_pool_;
     std::unique_ptr<BlockProcessor> block_processor_;
-};
-
-// ============== 补丁引擎 ==============
-
-class PatchEngine {
-public:
-    PatchEngine(const PatchOptions& options = {});
-    ~PatchEngine();
-    
-    Result apply_patch(
-        const std::string& old_path,
-        const std::string& patch_path,
-        const std::string& new_path,
-        ProgressCallback* callback = nullptr
-    );
-
-private:
-    bool read_patch_header(const std::string& path);
-    bool reconstruct_all_blocks(
-        MMapFile& old_file,
-        const std::string& patch_path,
-        const std::string& output_path,
-        ProgressCallback* callback
-    );
-    
-    PatchOptions options_;
-    PatchInfo patch_info_;
-    std::vector<uint64_t> block_offsets_;
 };
 
 } // namespace bindiff

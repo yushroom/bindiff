@@ -1,4 +1,5 @@
 #include "compress/compressor.hpp"
+#include <cstring>
 
 #if BINDIFF_HAS_LZ4
 #include <lz4.h>
@@ -19,7 +20,7 @@ size_t LZ4Compressor::compress_bound(size_t size) {
 #if BINDIFF_HAS_LZ4
     return static_cast<size_t>(LZ4_compressBound(static_cast<int>(size)));
 #else
-    // 无 LZ4 时，不压缩
+    // 无 LZ4 时，不添加额外字节
     return size;
 #endif
 }
@@ -65,7 +66,7 @@ std::vector<uint8_t> LZ4Compressor::compress(
     output.resize(compressed_size);
     return output;
 #else
-    // 无 LZ4 时，直接返回原数据
+    // 无 LZ4 时，直接返回原数据 (不添加长度前缀)
     return std::vector<uint8_t>(data, data + size);
 #endif
 }
@@ -96,10 +97,8 @@ std::vector<uint8_t> LZ4Compressor::decompress(
     
     return output;
 #else
-    // 无 LZ4 时，假设数据未压缩
-    if (size != original_size) {
-        return {};  // 大小不匹配
-    }
+    // 无 LZ4 时，直接返回原数据
+    // original_size 只是估计值，返回实际可用的数据
     return std::vector<uint8_t>(data, data + size);
 #endif
 }

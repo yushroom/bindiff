@@ -25,8 +25,10 @@ OBJ_DIR = $(BUILD_DIR)/obj
 
 # 源文件
 SOURCES = \
+    $(SRC_DIR)/bindiff.cpp \
     $(SRC_DIR)/core/diff_engine.cpp \
     $(SRC_DIR)/core/patch_engine.cpp \
+    $(SRC_DIR)/core/patch_format.cpp \
     $(SRC_DIR)/core/block_processor.cpp \
     $(SRC_DIR)/core/matcher.cpp \
     $(SRC_DIR)/core/operations.cpp \
@@ -34,7 +36,8 @@ SOURCES = \
     $(SRC_DIR)/io/stream_writer.cpp \
     $(SRC_DIR)/io/file_utils.cpp \
     $(SRC_DIR)/compress/lz4_compressor.cpp \
-    $(SRC_DIR)/crypto/sha256.cpp
+    $(SRC_DIR)/crypto/sha256.cpp \
+    $(SRC_DIR)/utils/thread_pool.cpp
 
 # 对象文件
 OBJECTS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))

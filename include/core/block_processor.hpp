@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core/operations.hpp"
+#include "io/mmap_file.hpp"
+#include "utils/thread_pool.hpp"
+#include "compress/compressor.hpp"
 #include "types.hpp"
 #include <memory>
 
@@ -10,12 +13,11 @@ namespace bindiff {
 
 struct BlockResult {
     uint32_t block_index;
-    std::vector<uint8_t> data;  // 压缩后的操作序列
+    std::vector<uint8_t> data;  // 压缩后的数据
+    uint32_t original_size = 0; // 压缩前的序列化数据大小
     bool success = false;
     std::string error;
 };
-
-class Compressor;  // 前向声明
 
 class BlockProcessor {
 public:
@@ -33,7 +35,8 @@ public:
     bool reconstruct_block(
         uint32_t block_index,
         const byte* old_data, size_t old_size,
-        const std::vector<uint8_t>& block_data,
+        const std::vector<uint8_t>& compressed_data,
+        uint32_t original_size,  // 解压后的原始大小
         byte* output, size_t output_size
     );
 

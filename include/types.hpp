@@ -68,7 +68,7 @@ struct PatchInfo {
     std::string new_sha256;
 };
 
-// ============== 核心接口 ==============
+// ============== 核心接口 (声明) ==============
 
 Result create_diff(
     const std::string& old_path,
@@ -94,10 +94,10 @@ Result verify_patch(
 
 PatchInfo get_patch_info(const std::string& patch_path);
 
-// ============== 工具函数 ==============
+// ============== 文件工具函数 (声明) ==============
 
-std::string format_size(uint64_t bytes);
-std::string format_duration(double seconds);
+bool file_exists(const std::string& path);
+uint64_t get_file_size(const std::string& path);
 
 // ============== 常量 ==============
 
