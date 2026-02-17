@@ -39,3 +39,7 @@ test_data/
 *.log
 .DS_Store
 Thumbs.db
+
+# LZ4 编译产物 (已在 lib/lz4 中)
+*.tar.gz
+lz4-*/

@@ -5,16 +5,27 @@ CXX ?= g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -fPIC
 LDFLAGS = -pthread
 
-# 检测系统 LZ4
-ifneq ($(shell pkg-config --exists liblz4 && echo yes),yes)
-    $(warning LZ4 未安装，压缩功能将不可用)
-    LZ4_CFLAGS =
-    LZ4_LIBS =
-    CXXFLAGS += -DBINDIFF_HAS_LZ4=0
+# LZ4 配置 - 使用本地编译的库
+LZ4_DIR = lib/lz4
+LZ4_INCLUDE = $(LZ4_DIR)/include
+LZ4_LIB = $(LZ4_DIR)/lib/liblz4.a
+
+ifneq ($(wildcard $(LZ4_LIB)),)
+    $(info 使用本地 LZ4: $(LZ4_LIB))
+    CXXFLAGS += -DBINDIFF_HAS_LZ4=1 -I$(LZ4_INCLUDE)
+    LZ4_LINK = $(LZ4_LIB)
 else
-    LZ4_CFLAGS = $(shell pkg-config --cflags liblz4)
-    LZ4_LIBS = $(shell pkg-config --libs liblz4)
-    CXXFLAGS += -DBINDIFF_HAS_LZ4=1 $(LZ4_CFLAGS)
+    # 检测系统 LZ4
+    ifneq ($(shell pkg-config --exists liblz4 && echo yes 2>/dev/null),yes)
+        $(warning LZ4 未安装，压缩功能将不可用)
+        CXXFLAGS += -DBINDIFF_HAS_LZ4=0
+        LZ4_LINK =
+    else
+        LZ4_CFLAGS = $(shell pkg-config --cflags liblz4)
+        LZ4_LIBS = $(shell pkg-config --libs liblz4)
+        CXXFLAGS += -DBINDIFF_HAS_LZ4=1 $(LZ4_CFLAGS)
+        LZ4_LINK = $(LZ4_LIBS)
+    endif
 endif
 
 # 目录
@@ -51,7 +62,7 @@ all: dirs $(TARGET_LIB) $(TARGET_BIN)
 
 # 创建目录
 dirs:
-	@mkdir -p $(BUILD_DIR) $(OBJ_DIR) $(OBJ_DIR)/core $(OBJ_DIR)/io $(OBJ_DIR)/compress $(OBJ_DIR)/crypto
+	@mkdir -p $(BUILD_DIR) $(OBJ_DIR) $(OBJ_DIR)/core $(OBJ_DIR)/io $(OBJ_DIR)/compress $(OBJ_DIR)/crypto $(OBJ_DIR)/utils
 
 # 静态库
 $(TARGET_LIB): $(OBJECTS)
@@ -60,7 +71,7 @@ $(TARGET_LIB): $(OBJECTS)
 
 # 可执行文件
 $(TARGET_BIN): $(TARGET_LIB) $(SRC_DIR)/main.cpp
-	$(CXX) $(CXXFLAGS) -I$(INC_DIR) $(SRC_DIR)/main.cpp $(TARGET_LIB) $(LZ4_LIBS) $(LDFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) -I$(INC_DIR) $(SRC_DIR)/main.cpp $(TARGET_LIB) $(LZ4_LINK) $(LDFLAGS) -o $@
 	@echo "✓ 可执行文件: $@"
 
 # 编译规则
