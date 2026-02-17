@@ -1,0 +1,41 @@
+# Build directories
+build/
+install/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+*.sln
+*.vcxproj*
+*.user
+*.sdf
+*.opensdf
+*.pdb
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Test artifacts
+*.bdp
+*.bin
+test_data/
+
+# Temp files
+*~
+*.swp
+*.swo
+*.log
+.DS_Store
+Thumbs.db
