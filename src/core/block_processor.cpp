@@ -35,6 +35,9 @@ BlockResult BlockProcessor::process_block(
     std::vector<Operation> operations;
     BlockMatcher matcher(32);  // 最小匹配 32 字节
     
+    // 为 old_data 构建索引以加速匹配
+    matcher.build_index(old_data, old_size, 32);
+    
     size_t pos = 0;
     while (pos < new_size) {
         // 尝试找到匹配
@@ -53,8 +56,9 @@ BlockResult BlockProcessor::process_block(
             size_t insert_start = pos;
             size_t insert_end = pos + 1;
             
-            // 继续查找下一个匹配点
-            while (insert_end < new_size) {
+            // 继续查找下一个匹配点 (限制搜索步长)
+            size_t max_search = std::min(pos + 1024, new_size);
+            while (insert_end < max_search) {
                 auto next_match = matcher.find_longest_match(
                     old_data, old_size,
                     new_data, new_size,
@@ -65,11 +69,11 @@ BlockResult BlockProcessor::process_block(
                     break;  // 找到下一个匹配，停止收集
                 }
                 ++insert_end;
-                
-                // 限制 INSERT 大小 (避免过大的单个操作)
-                if (insert_end - insert_start >= 65536) {
-                    break;
-                }
+            }
+            
+            // 如果到达搜索上限仍未找到，直接到末尾
+            if (insert_end == max_search && max_search < new_size) {
+                insert_end = new_size;
             }
             
             // 生成 INSERT 操作
