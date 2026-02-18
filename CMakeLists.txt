@@ -18,42 +18,32 @@ option(BINDIFF_BUILD_EXAMPLES "Build examples" ON)
 
 # 编译器特定选项
 if(MSVC)
-    # MSVC: 最高优化、多线程编译、警告级别4
     add_compile_options(/W4 /MP)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-    
-    # Release 配置
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /Ob2 /GL /Gy")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
-    
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /Ob2")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    # Clang/GCC: 最高优化、警告
     add_compile_options(-Wall -Wextra -Wpedantic)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-endif()
-
-# 大文件支持
-if(WIN32)
-    add_compile_definitions(_WIN32_WINNT=0x0601)  # Windows 7+
 endif()
 
 # 线程库
 find_package(Threads REQUIRED)
 
-# ============== LZ4 (内嵌源码) ==============
+# ============== LZ4 ==============
 
-# 如果 lib/lz4 目录存在，使用它
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/lib/lz4.c")
+# 检查本地 LZ4
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/include/lz4.h")
     add_library(lz4_static STATIC
-        lib/lz4/lib/lz4.c
-        lib/lz4/lib/lz4hc.c
+        lib/lz4/lib/liblz4.a
     )
-    target_include_directories(lz4_static PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/lib
+    target_include_directories(lz4_static INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/include
     )
     set(LZ4_AVAILABLE ON)
+    set(LZ4_LINK lz4_static)
+    message(STATUS "使用本地 LZ4")
 else()
-    # 尝试系统安装的 lz4
+    # 尝试系统 LZ4
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(LZ4 liblz4)
@@ -61,9 +51,11 @@ else()
     
     if(LZ4_FOUND)
         set(LZ4_AVAILABLE ON)
+        set(LZ4_LINK ${LZ4_LIBRARIES})
         message(STATUS "使用系统 LZ4: ${LZ4_LIBRARIES}")
     else()
         set(LZ4_AVAILABLE OFF)
+        set(LZ4_LINK "")
         message(WARNING "LZ4 未找到，压缩功能将不可用")
     endif()
 endif()
@@ -71,23 +63,19 @@ endif()
 # ============== 主库 ==============
 
 add_library(bindiff_lib STATIC
-    # Core
+    src/bindiff.cpp
     src/core/diff_engine.cpp
     src/core/patch_engine.cpp
+    src/core/patch_format.cpp
     src/core/block_processor.cpp
     src/core/matcher.cpp
     src/core/operations.cpp
-    
-    # I/O
     src/io/mmap_file.cpp
     src/io/stream_writer.cpp
     src/io/file_utils.cpp
-    
-    # Compression (条件编译)
     src/compress/lz4_compressor.cpp
-    
-    # Crypto
     src/crypto/sha256.cpp
+    src/utils/thread_pool.cpp
 )
 
 target_include_directories(bindiff_lib
@@ -97,19 +85,17 @@ target_include_directories(bindiff_lib
 )
 
 target_link_libraries(bindiff_lib
-    PUBLIC 
-        Threads::Threads
+    PUBLIC Threads::Threads
 )
 
 if(LZ4_AVAILABLE)
-    if(TARGET lz4_static)
-        target_link_libraries(bindiff_lib PRIVATE lz4_static)
-        target_compile_definitions(bindiff_lib PRIVATE BINDIFF_HAS_LZ4=1)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/include/lz4.h")
+        target_include_directories(bindiff_lib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/lz4/include)
     elseif(LZ4_FOUND)
         target_include_directories(bindiff_lib PRIVATE ${LZ4_INCLUDE_DIRS})
-        target_link_libraries(bindiff_lib PRIVATE ${LZ4_LIBRARIES})
-        target_compile_definitions(bindiff_lib PRIVATE BINDIFF_HAS_LZ4=1)
     endif()
+    target_compile_definitions(bindiff_lib PRIVATE BINDIFF_HAS_LZ4=1)
+    target_link_libraries(bindiff_lib PRIVATE ${LZ4_LINK})
 else()
     target_compile_definitions(bindiff_lib PRIVATE BINDIFF_HAS_LZ4=0)
 endif()
@@ -123,7 +109,24 @@ target_link_libraries(bindiff PRIVATE bindiff_lib)
 
 if(BINDIFF_BUILD_TESTS)
     enable_testing()
-    add_subdirectory(tests)
+    
+    add_executable(bindiff_tests
+        tests/test_main.cpp
+        tests/test_mmap.cpp
+        tests/test_matcher.cpp
+        tests/test_operations.cpp
+        tests/test_compress.cpp
+    )
+    target_link_libraries(bindiff_tests PRIVATE bindiff_lib)
+    
+    add_test(NAME bindiff_tests COMMAND bindiff_tests)
+    
+    # 添加集成测试
+    add_test(NAME integration_diff_patch
+        COMMAND ${CMAKE_COMMAND} 
+            -DTEST_PROGRAM=$<TARGET_FILE:bindiff>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/TestDiffPatch.cmake
+    )
 endif()
 
 # ============== 示例 ==============

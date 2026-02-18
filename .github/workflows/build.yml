@@ -1,0 +1,174 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Configure Compiler
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+        else
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
+        fi
+    
+    - name: Build with Makefile
+      run: |
+        make clean || true
+        make -j$(nproc)
+    
+    - name: Test CLI
+      run: |
+        ./build/bindiff --help
+        ./build/bindiff info --help || true
+    
+    - name: Create test files
+      run: |
+        echo "Hello World! This is the old file." > /tmp/old.bin
+        echo "Hello OpenClaw! This is the new file." > /tmp/new.bin
+    
+    - name: Test diff
+      run: |
+        ./build/bindiff diff /tmp/old.bin /tmp/new.bin /tmp/patch.bdp --progress
+    
+    - name: Test patch
+      run: |
+        ./build/bindiff patch /tmp/old.bin /tmp/patch.bdp /tmp/output.bin --progress
+    
+    - name: Verify output
+      run: |
+        diff /tmp/new.bin /tmp/output.bin
+        echo "✓ Test passed!"
+    
+    - name: Test info
+      run: |
+        ./build/bindiff info /tmp/patch.bdp
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+    
+    - name: Create build directory
+      run: mkdir build
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j
+    
+    - name: Test CLI
+      run: |
+        ./build/${{ matrix.build_type }}/bindiff.exe --help
+      shell: bash
+    
+    - name: Create test files
+      run: |
+        echo "Hello World! This is the old file." > old.bin
+        echo "Hello OpenClaw! This is the new file." > new.bin
+      shell: bash
+    
+    - name: Test diff
+      run: |
+        ./build/${{ matrix.build_type }}/bindiff.exe diff old.bin new.bin patch.bdp --progress
+      shell: bash
+    
+    - name: Test patch
+      run: |
+        ./build/${{ matrix.build_type }}/bindiff.exe patch old.bin patch.bdp output.bin --progress
+      shell: bash
+    
+    - name: Verify output
+      run: |
+        diff new.bin output.bin
+        echo "✓ Test passed!"
+      shell: bash
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        brew install cmake || true
+    
+    - name: Build with Makefile
+      run: |
+        make clean || true
+        make -j$(sysctl -n hw.ncpu) CXX=clang++
+    
+    - name: Test CLI
+      run: |
+        ./build/bindiff --help
+    
+    - name: Create test files
+      run: |
+        echo "Hello World! This is the old file." > /tmp/old.bin
+        echo "Hello OpenClaw! This is the new file." > /tmp/new.bin
+    
+    - name: Test diff
+      run: |
+        ./build/bindiff diff /tmp/old.bin /tmp/new.bin /tmp/patch.bdp --progress
+    
+    - name: Test patch
+      run: |
+        ./build/bindiff patch /tmp/old.bin /tmp/patch.bdp /tmp/output.bin --progress
+    
+    - name: Verify output
+      run: |
+        diff /tmp/new.bin /tmp/output.bin
+        echo "✓ Test passed!"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+    
+    - name: Build tests
+      run: |
+        mkdir -p build/tests
+        cd build
+        cmake .. -DBINDIFF_BUILD_TESTS=ON
+        cmake --build . --target bindiff_tests -j$(nproc)
+    
+    - name: Run unit tests
+      run: |
+        cd build
+        ctest --output-on-failure
