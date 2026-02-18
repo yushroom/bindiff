@@ -6,6 +6,8 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <sstream>
+#include <iomanip>
 
 namespace bindiff {
 
@@ -113,28 +115,36 @@ constexpr size_t MIN_MATCH_LENGTH = 32;
 
 // 格式化大小 (人类可读)
 inline std::string format_size(uint64_t bytes) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    
     if (bytes >= GB) {
-        return std::to_string(bytes / (1024.0 * 1024.0 * 1024.0)).substr(0, 5) + " GB";
+        oss << (bytes / (1024.0 * 1024.0 * 1024.0)) << " GB";
     } else if (bytes >= MB) {
-        return std::to_string(bytes / (1024.0 * 1024.0)).substr(0, 5) + " MB";
+        oss << (bytes / (1024.0 * 1024.0)) << " MB";
     } else if (bytes >= KB) {
-        return std::to_string(bytes / 1024.0).substr(0, 5) + " KB";
+        oss << (bytes / 1024.0) << " KB";
     } else {
-        return std::to_string(bytes) + " B";
+        oss << bytes << " B";
     }
+    return oss.str();
 }
 
 // 格式化持续时间
 inline std::string format_duration(double seconds) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1);
+    
     if (seconds < 1.0) {
-        return std::to_string(static_cast<int>(seconds * 1000)) + "ms";
+        oss << static_cast<int>(seconds * 1000) << "ms";
     } else if (seconds < 60.0) {
-        return std::to_string(static_cast<int>(seconds * 10) / 10.0).substr(0, 4) + "s";
+        oss << seconds << "s";
     } else {
         int mins = static_cast<int>(seconds) / 60;
         int secs = static_cast<int>(seconds) % 60;
-        return std::to_string(mins) + "m " + std::to_string(secs) + "s";
+        oss << mins << "m " << secs << "s";
     }
+    return oss.str();
 }
 
 } // namespace bindiff

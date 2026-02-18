@@ -42,9 +42,41 @@ uint64_t RollingHash::compute(const byte* data, size_t size) {
 }
 
 uint64_t RollingHash::mul_mod(uint64_t a, uint64_t b) {
-    // 使用 128 位乘法避免溢出
+    // 跨平台 128 位乘法
+#ifdef _MSC_VER
+    // MSVC: 使用 __umulh 和内置乘法
+    uint64_t a_lo = a & 0xFFFFFFFF;
+    uint64_t a_hi = a >> 32;
+    uint64_t b_lo = b & 0xFFFFFFFF;
+    uint64_t b_hi = b >> 32;
+    
+    uint64_t p0 = a_lo * b_lo;
+    uint64_t p1 = a_lo * b_hi;
+    uint64_t p2 = a_hi * b_lo;
+    uint64_t p3 = a_hi * b_hi;
+    
+    uint64_t cy = ((p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF)) >> 32;
+    
+    uint64_t lo = p0;
+    uint64_t hi = p3 + (p1 >> 32) + (p2 >> 32) + cy;
+    
+    // 对于 MOD = 2^61 - 1，使用 Montgomery reduction
+    // 简化：直接使用 64 位模
+    if (hi == 0) {
+        return lo % MOD;
+    }
+    
+    // 分解: (hi * 2^64 + lo) mod (2^61 - 1)
+    // = (hi mod MOD * (2^64 mod MOD) + lo mod MOD) mod MOD
+    uint64_t hi_mod = hi % MOD;
+    // 2^64 mod (2^61 - 1) = 2^3 = 8 (因为 2^61 ≡ 1)
+    uint64_t result = add_mod(mul_mod(hi_mod, 8), lo % MOD);
+    return result;
+#else
+    // GCC/Clang: 使用 __uint128_t
     __uint128_t res = static_cast<__uint128_t>(a) * b;
     return static_cast<uint64_t>(res % MOD);
+#endif
 }
 
 uint64_t RollingHash::add_mod(uint64_t a, uint64_t b) {
@@ -77,14 +109,11 @@ Match BlockMatcher::find_longest_match(
     
     // 如果有索引，使用哈希表快速查找
     if (!hash_table_[0].empty()) {
-        // 计算当前窗口的哈希
         hasher_.init(new_data + new_offset, min_match_);
         uint64_t target_hash = hasher_.hash();
         size_t bucket = hash_to_bucket(target_hash);
         
-        // 检查哈希表中的候选
         for (size_t old_pos : hash_table_[bucket]) {
-            // 验证匹配
             size_t len = 0;
             while (len < old_size - old_pos && 
                    len < new_size - new_offset &&
@@ -99,29 +128,24 @@ Match BlockMatcher::find_longest_match(
         }
     } else {
         // 无索引，使用快速滑动窗口搜索
-        // 限制搜索范围避免太慢
-        size_t max_search = std::min(old_size, static_cast<size_t>(1000000));  // 最多搜索 1MB
+        size_t max_search = std::min(old_size, static_cast<size_t>(1000000));
         
         size_t best_offset = 0;
         size_t best_length = 0;
         
-        // 使用哈希快速跳过不匹配的位置
         hasher_.init(new_data + new_offset, min_match_);
         uint64_t target_hash = hasher_.hash();
         
         RollingHash old_hasher(min_match_);
         
         for (size_t i = 0; i <= old_size - min_match_ && i < max_search; ) {
-            // 计算当前位置的哈希
             if (i == 0) {
                 old_hasher.init(old_data, min_match_);
             } else {
                 old_hasher.roll(old_data[i - 1], old_data[i + min_match_ - 1]);
             }
             
-            // 哈希匹配才验证
             if (old_hasher.hash() == target_hash) {
-                // 扩展匹配
                 size_t len = 0;
                 while (len < old_size - i && 
                        len < new_size - new_offset &&
@@ -133,7 +157,6 @@ Match BlockMatcher::find_longest_match(
                     best_length = len;
                     best_offset = i;
                     
-                    // 如果找到足够长的匹配，提前退出
                     if (best_length >= 1024) break;
                 }
             }
@@ -158,7 +181,6 @@ std::vector<Match> BlockMatcher::find_all_matches(
 ) {
     std::vector<Match> matches;
     
-    // 先构建索引
     build_index(old_data, old_size, min_match_);
     
     size_t pos = 0;
@@ -177,30 +199,25 @@ std::vector<Match> BlockMatcher::find_all_matches(
 }
 
 void BlockMatcher::build_index(const byte* data, size_t size, size_t chunk_size) {
-    // 清空旧索引
     for (auto& bucket : hash_table_) {
         bucket.clear();
     }
     
     if (size < chunk_size) return;
     
-    // 构建新索引
     RollingHash hasher(chunk_size);
     hasher.init(data, chunk_size);
     
-    // 存储第一个位置
     uint64_t hash = hasher.hash();
     size_t bucket = hash_to_bucket(hash);
     hash_table_[bucket].push_back(0);
     
-    // 滑动窗口
     for (size_t i = 1; i + chunk_size <= size; ++i) {
         hasher.roll(data[i - 1], data[i + chunk_size - 1]);
         
         hash = hasher.hash();
         bucket = hash_to_bucket(hash);
         
-        // 限制每个桶的大小避免冲突太多
         if (hash_table_[bucket].size() < 100) {
             hash_table_[bucket].push_back(i);
         }

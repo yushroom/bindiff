@@ -1,11 +1,14 @@
 #include "io/file_utils.hpp"
 #include <sys/stat.h>
+#include <cstring>
 
 #ifdef _WIN32
     #include <windows.h>
     #include <io.h>
+    #define WIN32_LEAN_AND_MEAN
 #else
     #include <unistd.h>
+    #include <fcntl.h>
 #endif
 
 namespace bindiff {
@@ -29,7 +32,8 @@ uint64_t get_file_size(const std::string& path) {
 
 bool file_exists(const std::string& path) {
 #ifdef _WIN32
-    return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+    DWORD attrib = GetFileAttributesA(path.c_str());
+    return attrib != INVALID_FILE_ATTRIBUTES && !(attrib & FILE_ATTRIBUTE_DIRECTORY);
 #else
     return access(path.c_str(), F_OK) == 0;
 #endif
@@ -47,7 +51,7 @@ bool rename_file(const std::string& old_path, const std::string& new_path) {
 #ifdef _WIN32
     return MoveFileA(old_path.c_str(), new_path.c_str()) != FALSE;
 #else
-    return rename(old_path.c_str(), new_path.c_str()) == 0;
+    return ::rename(old_path.c_str(), new_path.c_str()) == 0;
 #endif
 }
 
@@ -61,15 +65,33 @@ bool create_directory(const std::string& path) {
 
 std::string get_temp_file_path(const std::string& prefix) {
 #ifdef _WIN32
-    char temp[MAX_PATH];
-    GetTempPathA(MAX_PATH, temp);
-    char file[MAX_PATH];
-    GetTempFileNameA(temp, prefix.c_str(), 0, file);
-    return file;
+    char temp_path[MAX_PATH];
+    char temp_file[MAX_PATH];
+    
+    if (GetTempPathA(MAX_PATH, temp_path) == 0) {
+        return "";
+    }
+    
+    if (GetTempFileNameA(temp_path, prefix.c_str(), 0, temp_file) == 0) {
+        return "";
+    }
+    
+    return std::string(temp_file);
 #else
-    std::string templ = "/tmp/" + prefix + "XXXXXX";
-    char* path = mktemp(const_cast<char*>(templ.c_str()));
-    return path ? path : "";
+    // 使用 mkstemp 创建安全的临时文件
+    std::string templ = "/tmp/" + prefix + "_XXXXXX";
+    std::vector<char> templ_buf(templ.begin(), templ.end());
+    templ_buf.push_back('\0');
+    
+    int fd = mkstemp(templ_buf.data());
+    if (fd == -1) {
+        return "";
+    }
+    
+    // 关闭文件描述符，只返回路径
+    close(fd);
+    
+    return std::string(templ_buf.data());
 #endif
 }
 
@@ -77,9 +99,9 @@ bool copy_file(const std::string& src, const std::string& dst) {
 #ifdef _WIN32
     return CopyFileA(src.c_str(), dst.c_str(), FALSE) != FALSE;
 #else
-    // 简单实现，生产环境应使用 sendfile 或 splice
     FILE* fin = fopen(src.c_str(), "rb");
     FILE* fout = fopen(dst.c_str(), "wb");
+    
     if (!fin || !fout) {
         if (fin) fclose(fin);
         if (fout) fclose(fout);
@@ -88,17 +110,18 @@ bool copy_file(const std::string& src, const std::string& dst) {
     
     char buf[8192];
     size_t n;
+    bool success = true;
+    
     while ((n = fread(buf, 1, sizeof(buf), fin)) > 0) {
         if (fwrite(buf, 1, n, fout) != n) {
-            fclose(fin);
-            fclose(fout);
-            return false;
+            success = false;
+            break;
         }
     }
     
     fclose(fin);
     fclose(fout);
-    return true;
+    return success;
 #endif
 }
 
@@ -109,7 +132,13 @@ std::string get_filename(const std::string& path) {
 
 std::string get_extension(const std::string& path) {
     size_t pos = path.find_last_of('.');
-    if (pos == std::string::npos || pos == 0) return "";
+    size_t sep = path.find_last_of("/\\");
+    
+    // 确保点号在路径分隔符之后
+    if (pos == std::string::npos || pos == 0 || 
+        (sep != std::string::npos && pos < sep)) {
+        return "";
+    }
     return path.substr(pos);
 }
 
@@ -123,15 +152,24 @@ std::string join_path(const std::string& a, const std::string& b) {
     if (b.empty()) return a;
     
 #ifdef _WIN32
-    char sep = '\\';
+    const char sep = '\\';
 #else
-    char sep = '/';
+    const char sep = '/';
 #endif
     
-    if (a.back() == sep || a.back() == '/' || a.back() == '\\') {
-        return a + b;
+    // 移除末尾的分隔符
+    std::string result = a;
+    while (!result.empty() && (result.back() == '/' || result.back() == '\\')) {
+        result.pop_back();
     }
-    return a + sep + b;
+    
+    // 移除开头的分隔符
+    std::string second = b;
+    while (!second.empty() && (second.front() == '/' || second.front() == '\\')) {
+        second.erase(0, 1);
+    }
+    
+    return result + sep + second;
 }
 
 } // namespace bindiff
