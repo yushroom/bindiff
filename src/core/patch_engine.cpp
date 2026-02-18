@@ -144,6 +144,9 @@ bool PatchEngine::reconstruct_all_blocks(
     if (patch_info_.new_size > 0) {
         output.seekp(patch_info_.new_size - 1);
         output.put(0);
+        if (!output) {
+            return false;  // 磁盘空间不足或写入失败
+        }
         output.seekp(0);
     }
     

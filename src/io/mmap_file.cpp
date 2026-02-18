@@ -204,6 +204,13 @@ bool MMapFile::map_file(const std::string& path, bool read_only) {
     }
     size_ = static_cast<uint64_t>(st.st_size);
     
+    // 空文件特殊处理
+    if (size_ == 0) {
+        handle_ = reinterpret_cast<void*>(static_cast<intptr_t>(fd));
+        data_ = nullptr;
+        return true;
+    }
+    
     // 映射
     void* addr = mmap(
         nullptr,

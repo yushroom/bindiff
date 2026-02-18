@@ -27,8 +27,15 @@ void RollingHash::init(const byte* data, size_t size) {
 
 void RollingHash::roll(byte oldest, byte newest) {
     // hash = (hash * BASE - oldest * pow_base + newest) mod MOD
+    hash_ = mul_mod(hash_, BASE);
+    hash_ = add_mod(hash_, newest);
+    
     uint64_t sub = mul_mod(static_cast<uint64_t>(oldest), pow_base_);
-    hash_ = add_mod(mul_mod(hash_, BASE) + newest + MOD - sub, 0);
+    if (hash_ >= sub) {
+        hash_ -= sub;
+    } else {
+        hash_ = hash_ + MOD - sub;
+    }
 }
 
 void RollingHash::reset() {
@@ -128,7 +135,17 @@ Match BlockMatcher::find_longest_match(
         }
     } else {
         // 无索引，使用快速滑动窗口搜索
-        size_t max_search = std::min(old_size, static_cast<size_t>(1000000));
+        // 动态调整搜索范围：对于大文件，搜索前 10MB 或 10% 的数据
+        size_t max_search = std::min(
+            old_size, 
+            std::max(
+                static_cast<size_t>(1000000),  // 至少 1MB
+                std::min(
+                    old_size / 10,              // 最多搜索 10% 的数据
+                    static_cast<size_t>(10000000)  // 但不超过 10MB
+                )
+            )
+        );
         
         size_t best_offset = 0;
         size_t best_length = 0;

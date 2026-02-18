@@ -56,8 +56,16 @@ BlockResult BlockProcessor::process_block(
             size_t insert_start = pos;
             size_t insert_end = pos + 1;
             
-            // 继续查找下一个匹配点 (限制搜索步长)
-            size_t max_search = std::min(pos + 1024, new_size);
+            // 继续查找下一个匹配点
+            // 动态调整搜索窗口：对于大数据块，增大搜索步长
+            size_t search_window = std::min(
+                static_cast<size_t>(4096),  // 最多向前搜索 4KB
+                std::max(
+                    static_cast<size_t>(256),  // 至少 256 字节
+                    new_size / 1000            // 或 0.1% 的新文件大小
+                )
+            );
+            size_t max_search = std::min(pos + search_window, new_size);
             while (insert_end < max_search) {
                 auto next_match = matcher.find_longest_match(
                     old_data, old_size,
