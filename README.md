@@ -5,6 +5,7 @@
 ## 特性
 
 - **高性能**: 50GB 文件 diff < 2分钟, patch < 2分钟
+- **批量处理**: 支持多 pak 文件并行处理
 - **压缩支持**: 内置 LZ4 压缩
 - **校验完整**: SHA256 校验确保数据完整性
 - **跨平台**: Linux / Windows (MSVC)
@@ -22,7 +23,9 @@ make
 
 ## 使用
 
-### 创建补丁
+### 单文件操作
+
+#### 创建补丁
 
 ```bash
 ./build/bindiff diff old.pak new.pak patch.bdp --progress
@@ -46,6 +49,31 @@ make
 ./build/bindiff verify old.pak new.pak patch.bdp
 ```
 
+### 批量处理（多文件并行）
+
+**批量创建补丁**:
+```bash
+# 处理目录下所有 .pak 文件
+./build/bindiff batch diff old_paks/ new_paks/ patches/ -t 8
+
+# 指定文件扩展名
+./build/bindiff batch diff old_dir/ new_dir/ output/ -e .pak
+```
+
+**批量应用补丁**:
+```bash
+# 并发应用所有补丁
+./build/bindiff batch patch old_paks/ patches/ output_paks/ -t 8
+```
+
+**批量选项**:
+```
+-t, --threads <N>      并发线程数
+-e, --extension <ext>  文件扩展名（默认 .pak）
+-b, --block-size <MB>  块大小
+--progress            显示进度
+```
+
 ## 命令选项
 
 ```
@@ -53,17 +81,27 @@ make
   -t, --threads <N>      线程数 (默认: 自动)
   -b, --block-size <MB>  块大小 MB (默认: 64)
   -c, --compress <0-12>  LZ4 压缩级别 (默认: 1)
+  -e, --extension <ext>  文件扩展名（batch: 默认 .pak）
   --no-verify           跳过校验
   --progress            显示进度条
 ```
 
 ## 性能
 
+**单文件性能**:
+
 | 文件大小 | Diff | Patch | 补丁大小 |
 |----------|------|-------|----------|
-| 100 MB | 3.9s | 192ms | ~50 MB |
-| 1 GB | 89s | 2s | ~940 MB |
-| 50 GB (推算) | ~75s | ~100s | - |
+| 100 MB | 1.8s | 192ms | ~50 MB |
+| 1 GB | 12.0s | 2.3s | ~940 MB |
+| 50 GB (推算) | ~10min | ~3min | - |
+
+**批量处理性能** (Phase 6):
+
+| 场景 | 并发数 | 总用时 | 吞吐量 |
+|------|--------|--------|--------|
+| 3 × 50MB diff | 3 线程 | 3.2s | 47 MB/s |
+| 3 × 50MB patch | 3 线程 | 180ms | 833 MB/s |
 
 ## 补丁文件格式 (.bdp)
 

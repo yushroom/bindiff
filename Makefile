@@ -95,6 +95,11 @@ test: $(TARGET_BIN)
 	@echo "运行基本测试..."
 	@./$(TARGET_BIN) --help || true
 	@echo ""
+	@echo "编译批量处理测试..."
+	@$(CXX) $(CXXFLAGS) -I$(INC_DIR) tests/test_batch.cpp $(TARGET_LIB) $(LZ4_LINK) $(LDFLAGS) -o $(BUILD_DIR)/test_batch
+	@echo "运行批量处理测试..."
+	@./$(BUILD_DIR)/test_batch
+	@echo ""
 	@echo "✓ 测试完成"
 
 # 显示帮助

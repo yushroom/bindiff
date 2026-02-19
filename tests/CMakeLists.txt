@@ -7,6 +7,7 @@ add_executable(bindiff_tests
     test_matcher.cpp
     test_operations.cpp
     test_compress.cpp
+    test_batch.cpp
 )
 
 target_link_libraries(bindiff_tests PRIVATE bindiff_lib)
