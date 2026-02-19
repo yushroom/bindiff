@@ -40,6 +40,54 @@
 
 ---
 
+## ✅ Phase 6: 批量并行处理 (2026-02-19)
+
+### 新功能
+**多 pak 文件并行处理** - 针对游戏包体场景（十几个 pak，每个数百 MB ~ 10GB）
+
+### 实现内容
+1. **BatchProcessor** - 批处理引擎核心
+   - 多文件并行 diff/patch
+   - 线程池管理
+   - 进度追踪
+
+2. **CLI 命令扩展**
+   ```bash
+   bindiff batch diff <old_dir> <new_dir> <output_dir> [options]
+   bindiff batch patch <old_dir> <patch_dir> <output_dir> [options]
+   ```
+
+3. **选项支持**
+   - `-t, --threads <N>` 并发线程数
+   - `-e, --extension <ext>` 文件扩展名（默认 .pak）
+   - `-b, --block-size <MB>` 块大小
+   - `-c, --compress <0-12>` 压缩级别
+   - `--progress` 实时进度显示
+
+4. **进度显示**
+   - 单任务进度条
+   - 任务完成摘要
+   - 整体统计信息
+
+### 测试结果
+
+**测试场景**: 3 × 50MB pak 文件（10% 数据变更）
+
+| 操作 | 并发数 | 总用时 | 吞吐量 |
+|------|--------|--------|--------|
+| batch diff | 3 线程 | 3.2s | 47 MB/s |
+| batch patch | 3 线程 | 180ms | 833 MB/s |
+
+**验证**: SHA256 校验全部通过 ✅
+
+### 代码变更
+- 新增 `include/core/batch_processor.hpp`
+- 新增 `src/core/batch_processor.cpp`
+- 更新 `src/main.cpp` (batch 命令)
+- 更新 `Makefile` 和 `CMakeLists.txt`
+
+---
+
 ## Phase 5: 集成 (可选)
 
 - [ ] Unreal 插件

@@ -70,6 +70,7 @@ add_library(bindiff_lib STATIC
     src/core/block_processor.cpp
     src/core/matcher.cpp
     src/core/operations.cpp
+    src/core/batch_processor.cpp
     src/io/mmap_file.cpp
     src/io/stream_writer.cpp
     src/io/file_utils.cpp

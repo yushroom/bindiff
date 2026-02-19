@@ -43,6 +43,7 @@ SOURCES = \
     $(SRC_DIR)/core/block_processor.cpp \
     $(SRC_DIR)/core/matcher.cpp \
     $(SRC_DIR)/core/operations.cpp \
+    $(SRC_DIR)/core/batch_processor.cpp \
     $(SRC_DIR)/io/mmap_file.cpp \
     $(SRC_DIR)/io/stream_writer.cpp \
     $(SRC_DIR)/io/file_utils.cpp \
