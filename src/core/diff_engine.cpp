@@ -69,7 +69,21 @@ Result DiffEngine::create_diff(
     // 4. 初始化线程池
     init_thread_pool();
     
-    // 5. 分块处理
+    // 5. 并行构建全局索引
+    if (callback) {
+        callback->on_progress(0.35f, "构建全局索引");
+    }
+    global_matcher_ = std::make_unique<BlockMatcher>(32);
+    
+    // 使用与线程池相同的线程数
+    int index_threads = options_.num_threads;
+    if (index_threads <= 0) {
+        index_threads = static_cast<int>(std::thread::hardware_concurrency());
+        if (index_threads <= 0) index_threads = 4;
+    }
+    global_matcher_->build_index_parallel(old_file.data(), old_file.size(), 32, index_threads);
+    
+    // 6. 分块处理
     if (callback) {
         callback->on_progress(0.4f, "分析文件差异");
     }
@@ -142,7 +156,11 @@ std::vector<BlockResult> DiffEngine::process_all_blocks(
             const byte* old_data = old_file.data();
             size_t old_size = static_cast<size_t>(old_file.size());
             
-            return block_processor_->process_block(i, old_data, old_size, new_data, new_block_size);
+            // 使用全局索引
+            return block_processor_->process_block(
+                i, old_data, old_size, new_data, new_block_size, 
+                global_matcher_.get()
+            );
         }));
     }
     

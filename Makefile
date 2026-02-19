@@ -2,8 +2,8 @@
 # 适用于没有 CMake 的环境
 
 CXX ?= g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -fPIC
-LDFLAGS = -pthread
+CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -march=native -fPIC -flto
+LDFLAGS = -pthread -flto
 
 # LZ4 配置 - 使用本地编译的库
 LZ4_DIR = lib/lz4

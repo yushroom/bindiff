@@ -73,6 +73,9 @@ public:
     
     // 构建哈希索引 (加速匹配)
     void build_index(const byte* data, size_t size, size_t chunk_size = 32);
+    
+    // 并行构建索引 (多线程)
+    void build_index_parallel(const byte* data, size_t size, size_t chunk_size = 32, int num_threads = 0);
 
 private:
     size_t min_match_;

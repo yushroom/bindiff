@@ -20,7 +20,8 @@ BlockProcessor::~BlockProcessor() = default;
 BlockResult BlockProcessor::process_block(
     uint32_t block_index,
     const byte* old_data, size_t old_size,
-    const byte* new_data, size_t new_size
+    const byte* new_data, size_t new_size,
+    const BlockMatcher* global_matcher
 ) {
     BlockResult result;
     result.block_index = block_index;
@@ -31,17 +32,26 @@ BlockResult BlockProcessor::process_block(
         return result;
     }
     
-    // 使用块匹配器生成操作
-    std::vector<Operation> operations;
-    BlockMatcher matcher(32);  // 最小匹配 32 字节
+    // 使用全局匹配器或创建本地匹配器
+    BlockMatcher* matcher = nullptr;
+    std::unique_ptr<BlockMatcher> local_matcher;
     
-    // 为 old_data 构建索引以加速匹配
-    matcher.build_index(old_data, old_size, 32);
+    if (global_matcher) {
+        matcher = const_cast<BlockMatcher*>(global_matcher);
+    } else {
+        // 降级：创建本地索引（性能较差）
+        local_matcher = std::make_unique<BlockMatcher>(32);
+        local_matcher->build_index(old_data, old_size, 32);
+        matcher = local_matcher.get();
+    }
+    
+    // 生成操作
+    std::vector<Operation> operations;
     
     size_t pos = 0;
     while (pos < new_size) {
         // 尝试找到匹配
-        auto match = matcher.find_longest_match(
+        auto match = matcher->find_longest_match(
             old_data, old_size,
             new_data, new_size,
             pos
@@ -67,7 +77,7 @@ BlockResult BlockProcessor::process_block(
             );
             size_t max_search = std::min(pos + search_window, new_size);
             while (insert_end < max_search) {
-                auto next_match = matcher.find_longest_match(
+                auto next_match = matcher->find_longest_match(
                     old_data, old_size,
                     new_data, new_size,
                     insert_end
@@ -98,10 +108,16 @@ BlockResult BlockProcessor::process_block(
     // 保存原始大小
     result.original_size = static_cast<uint32_t>(serialized.size());
     
-    // 压缩
+    // 压缩（移动语义，避免拷贝）
     if (serialized.size() > 0) {
         result.data = compressor_->compress(serialized.data(), serialized.size());
     }
+    
+    // 清空临时数据，减少内存占用
+    operations.clear();
+    operations.shrink_to_fit();
+    serialized.clear();
+    serialized.shrink_to_fit();
     
     result.success = true;
     return result;

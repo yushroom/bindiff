@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/operations.hpp"
+#include "core/matcher.hpp"
 #include "io/mmap_file.hpp"
 #include "utils/thread_pool.hpp"
 #include "compress/compressor.hpp"
@@ -24,11 +25,12 @@ public:
     BlockProcessor(uint32_t block_size, int compression_level = 1);
     ~BlockProcessor();
     
-    // 处理单个块 (可并行)
+    // 处理单个块 (可并行) - 使用全局索引
     BlockResult process_block(
         uint32_t block_index,
         const byte* old_data, size_t old_size,
-        const byte* new_data, size_t new_size
+        const byte* new_data, size_t new_size,
+        const BlockMatcher* global_matcher = nullptr  // 新增：全局索引
     );
     
     // 从块数据重建文件
@@ -79,6 +81,7 @@ private:
     DiffOptions options_;
     std::unique_ptr<ThreadPool> thread_pool_;
     std::unique_ptr<BlockProcessor> block_processor_;
+    std::unique_ptr<BlockMatcher> global_matcher_;  // 新增：全局匹配器
 };
 
 } // namespace bindiff
